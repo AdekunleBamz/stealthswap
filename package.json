@@ -1,0 +1,35 @@
+{
+  "name": "stealthswap",
+  "version": "1.0.0",
+  "description": "Private BTC ↔ Starknet Atomic Swaps powered by Zero-Knowledge Proofs",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspaces",
+    "build:contracts": "cd contracts && scarb build",
+    "test": "npm run test --workspaces --if-present",
+    "test:contracts": "cd contracts && scarb test",
+    "install:all": "npm install && cd contracts && scarb fetch",
+    "clean": "rm -rf node_modules backend/node_modules frontend/node_modules backend/dist frontend/dist contracts/target"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "starknet",
+    "bitcoin",
+    "atomic-swap",
+    "zero-knowledge",
+    "privacy",
+    "cairo",
+    "defi"
+  ],
+  "author": "",
+  "license": "MIT"
+}

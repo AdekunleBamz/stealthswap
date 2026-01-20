@@ -1,0 +1,12 @@
+[package]
+name = "stealthswap"
+version = "0.1.0"
+edition = "2024_07"
+
+[dependencies]
+starknet = "2.9.2"
+
+[lib]
+
+[[target.starknet-contract]]
+casm = true
