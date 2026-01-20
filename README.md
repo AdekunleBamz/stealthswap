@@ -26,15 +26,21 @@ StealthSwap enables **privacy-preserving atomic swaps** between Bitcoin and Star
 │                                                                 │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
 │  │   React UI   │◄──►│   Backend    │◄──►│    Cairo     │      │
-│  │  Dashboard   │    │   Mock BTC   │    │   Contracts  │      │
+│  │  Dashboard   │    │  BTC Testnet │    │   Contracts  │      │
 │  └──────────────┘    └──────────────┘    └──────────────┘      │
 │         │                   │                   │               │
 │         │                   │                   │               │
 │         ▼                   ▼                   ▼               │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │   Wallet     │    │   HTLC       │    │   ZK Proof   │      │
-│  │  Connection  │    │   Service    │    │  Verification│      │
+│  │   Wallet     │    │  Real HTLC   │    │   ZK Proof   │      │
+│  │  Connection  │    │  (bitcoinjs) │    │  Verification│      │
 │  └──────────────┘    └──────────────┘    └──────────────┘      │
+│                             │                                   │
+│                             ▼                                   │
+│                      ┌──────────────┐                          │
+│                      │  Blockstream │                          │
+│                      │  Testnet API │                          │
+│                      └──────────────┘                          │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -94,12 +100,12 @@ stealthswap/
 │   │   └── types.cairo     # Shared types
 │   └── Scarb.toml
 │
-├── backend/                # Mock BTC HTLC service
+├── backend/                # Real BTC Testnet HTLC service
 │   ├── src/
 │   │   ├── index.ts        # Express server
 │   │   ├── types.ts        # TypeScript types
 │   │   ├── routes/         # API routes
-│   │   └── services/       # Business logic
+│   │   └── services/       # Bitcoin testnet (bitcoinjs-lib)
 │   └── package.json
 │
 ├── frontend/               # React dashboard
@@ -123,9 +129,11 @@ User creates a swap request specifying:
 - Timelock duration
 
 ### 2. BTC HTLC Creation
-A Hash Time-Locked Contract is created on Bitcoin (mocked for testnet):
-- Funds are locked with a hashlock
-- Timelock prevents indefinite locking
+A Hash Time-Locked Contract is created on Bitcoin Testnet:
+- Real HTLC scripts using bitcoinjs-lib
+- Funds locked with SHA256 hashlock
+- Block-height based timelock via OP_CHECKLOCKTIMEVERIFY
+- Broadcast to real Bitcoin testnet via Blockstream API
 
 ### 3. Starknet Contract Lock
 The Starknet contract verifies:
