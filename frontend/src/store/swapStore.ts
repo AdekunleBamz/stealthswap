@@ -17,7 +17,7 @@ interface SwapStore {
   error: string | null;
   
   // Actions
-  setSwaps: (swaps: Swap[]) => void;
+  setSwaps: (swaps: Swap[] | ((prev: Swap[]) => Swap[])) => void;
   addSwap: (swap: Swap) => void;
   setActiveSwap: (swap: Swap | null) => void;
   setPreimage: (preimage: string | null) => void;
@@ -45,7 +45,11 @@ export const useSwapStore = create<SwapStore>()(
       error: null,
       
       // Actions
-      setSwaps: (swaps) => set({ swaps }),
+      setSwaps: (swapsOrUpdater) => set((state) => ({
+        swaps: typeof swapsOrUpdater === 'function' 
+          ? swapsOrUpdater(state.swaps) 
+          : swapsOrUpdater
+      })),
       
       addSwap: (swap) => set((state) => ({ 
         swaps: [swap, ...state.swaps],

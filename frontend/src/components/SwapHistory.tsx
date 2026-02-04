@@ -13,9 +13,11 @@ export function SwapHistory() {
       try {
         const response = await getAllSwaps();
         if (response.swaps) {
+          // Get current state directly to avoid stale closure
+          const currentSwaps = useSwapStore.getState().swaps;
           const now = Math.floor(Date.now() / 1000);
           const mappedSwaps = response.swaps.map((swap: any) => {
-            const existing = swaps.find((s) => s.id === swap.id);
+            const existing = currentSwaps.find((s) => s.id === swap.id);
             const blocksRemaining = typeof swap.blocksRemaining === 'number' ? swap.blocksRemaining : 0;
             const fallbackTimelock = blocksRemaining > 0
               ? now + blocksRemaining * 10 * 60
@@ -70,7 +72,7 @@ export function SwapHistory() {
             };
           });
 
-          const existingOnly = swaps.filter((s) => !response.swaps.some((r: any) => r.id === s.id));
+          const existingOnly = currentSwaps.filter((s) => !response.swaps.some((r: any) => r.id === s.id));
           const combined = [...mappedSwaps, ...existingOnly];
           const unique = Array.from(new Map(combined.map((s) => [s.id, s])).values());
           setSwaps(unique);
@@ -84,7 +86,7 @@ export function SwapHistory() {
     const interval = setInterval(fetchSwaps, 10000); // Refresh every 10s
 
     return () => clearInterval(interval);
-  }, [setSwaps, swaps]);
+  }, [setSwaps]);
 
   if (swaps.length === 0) {
     return (
