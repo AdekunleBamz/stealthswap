@@ -539,9 +539,13 @@ export function SwapStatus({ swap }: SwapStatusProps) {
               <ExternalLink className="w-4 h-4" />
               View on Starknet
             </a>
-            {!swap.starknetSwapId && (
+            {!swap.starknetSwapId ? (
               <div className="w-full text-center text-sm text-yellow-400 mt-2">
                 ⏳ Waiting for transaction confirmation... (check Voyager for status)
+              </div>
+            ) : (
+              <div className="w-full text-center text-sm text-green-400 mt-2">
+                ✅ Transaction confirmed on L2
               </div>
             )}
           </>
