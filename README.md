@@ -21,6 +21,22 @@ Starknet's STARK-based execution enables scalable, quantum-safe verification of 
 - 📊 **Privacy Scoring**: Real-time anonymity metrics
 - 🎨 **Beautiful Dashboard**: Monitor swaps with live countdown timers
 
+## 🚦 Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Bitcoin HTLC | ✅ Complete | Real atomic swap scripts with OP_CHECKLOCKTIMEVERIFY |
+| Amount Commitments | ✅ Complete | Poseidon hash-based privacy layer |
+| Bitcoin Testnet | ✅ Complete | Real HTLC transactions via Blockstream API |
+| Starknet Deployment | ✅ Complete | Live on Sepolia ([verified contract](https://sepolia.voyager.online/contract/0x058acc5b4ef9d1c65f5672f2174f01c62bd9bdc318e99d093d4b3ca71b56bdfc)) |
+| Privacy Scoring | ✅ Complete | Heuristic-based anonymity metrics |
+| Cross-Chain Relayer | ✅ Complete | Backend coordinates preimage revelation |
+| Token Transfers | 🚧 Coordinated | Backend-managed (future: on-chain ERC20) |
+| Full STARK Proofs | 🚧 Foundation | Commitment structure ready for proof integration |
+| Decentralized Relayer | 📋 Planned | Currently centralized coordinator |
+
+**Legend**: ✅ Production-ready | 🚧 Working foundation | 📋 Future roadmap
+
 ## 🏗️ Architecture
 
 ```

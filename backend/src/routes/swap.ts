@@ -175,12 +175,13 @@ swapRouter.post('/initiate', async (req: Request, res: Response) => {
     const starknetTimelock = Math.floor(Date.now() / 1000) + starknetTimelockSeconds + 300; // +5 min safety margin
 
     // Generate Starknet-compatible hashlock using Poseidon hash
-    // The preimage is a felt252-safe value (31 bytes = 62 hex chars)
+    // SAFETY: We use 31-byte preimages (248 bits) to ensure Poseidon output fits in felt252 (252 bits).
+    // The truncation below is a defensive check - in practice, Poseidon(31 bytes) never exceeds felt252.
     const starknetPreimage = '0x' + Buffer.from(preimage, 'hex').toString('hex').slice(0, 62);
     const rawStarknetHashlock = hash.computePoseidonHashOnElements([starknetPreimage]);
     
     // Truncate hashlock to fit felt252 (max 252 bits = 63 hex chars after 0x)
-    // This is critical because the contract stores the truncated value
+    // This defensive truncation ensures compatibility even if hash output varies
     const truncateToFelt252 = (h: string): string => {
       const hex = h.replace('0x', '');
       return '0x' + (hex.length > 63 ? hex.slice(0, 63) : hex);

@@ -264,7 +264,14 @@ export async function createHTLCFundingTx(
   // Fetch UTXOs
   const utxos = await getUTXOs(senderPayment.address!);
   if (utxos.length === 0) {
-    throw new Error('No UTXOs available. Fund your testnet wallet first.');
+    throw new Error(
+      `No UTXOs found for ${senderPayment.address}\n\n` +
+      `🪙 Get free testnet BTC from these faucets:\n` +
+      `   • https://coinfaucet.eu/en/btc-testnet/\n` +
+      `   • https://testnet-faucet.mempool.co/\n\n` +
+      `💡 Check your balance at:\n` +
+      `   https://blockstream.info/testnet/address/${senderPayment.address}`
+    );
   }
 
   // Calculate inputs needed
