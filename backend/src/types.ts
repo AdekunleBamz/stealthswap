@@ -7,7 +7,7 @@ export interface HTLC {
   timelock: number; // Unix timestamp
   status: HTLCStatus;
   createdAt: number;
-  txid?: string; // Mock BTC transaction ID
+  txid?: string; // BTC transaction ID
 }
 
 export type HTLCStatus = 'pending' | 'locked' | 'completed' | 'refunded' | 'expired';

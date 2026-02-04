@@ -1,7 +1,7 @@
 {
   "name": "stealthswap-backend",
   "version": "1.0.0",
-  "description": "Mock BTC HTLC service for StealthSwap",
+  "description": "Bitcoin Testnet HTLC coordination service for StealthSwap",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

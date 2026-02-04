@@ -215,7 +215,7 @@ npm test
 
 **What We Built**:
 - Cairo smart contracts for atomic swaps with cryptographic commitment verification
-- Mock BTC HTLC service simulating Bitcoin integration
+- Bitcoin Testnet HTLC transactions generated and broadcast via Blockstream API
 - React dashboard with real-time swap monitoring
 - Privacy scoring system
 
