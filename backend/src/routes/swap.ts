@@ -298,6 +298,50 @@ swapRouter.post('/:id/link-starknet', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/swap/:id/status
+ * Update swap status (called by frontend after Starknet transactions)
+ */
+swapRouter.post('/:id/status', async (req: Request, res: Response) => {
+  try {
+    const { status, starknetTxHash, starknetSwapId } = req.body;
+    const swap = swaps.get(req.params.id);
+
+    if (!swap) {
+      return res.status(404).json({ error: 'Swap not found' });
+    }
+
+    // Update status
+    if (status) {
+      swap.status = status;
+    }
+    
+    // Update starknet data if provided
+    if (starknetTxHash) {
+      swap.starknet = swap.starknet || {};
+      swap.starknet.txHash = starknetTxHash;
+    }
+    if (starknetSwapId) {
+      swap.starknet = swap.starknet || {};
+      swap.starknet.swapId = starknetSwapId;
+    }
+    
+    swaps.set(req.params.id, swap);
+
+    res.json({
+      success: true,
+      swap: {
+        id: swap.id,
+        status: swap.status,
+        starknetTxHash: swap.starknet?.txHash,
+        starknetSwapId: swap.starknet?.swapId,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update swap status' });
+  }
+});
+
+/**
  * POST /api/swap/:id/resolve-starknet
  * Resolve Starknet swap ID from a transaction hash (server-side RPC avoids CORS)
  */

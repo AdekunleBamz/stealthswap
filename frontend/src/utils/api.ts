@@ -97,3 +97,15 @@ export async function checkHealth() {
   const response = await fetch(`${API_BASE.replace('/api', '')}/health`);
   return response.json();
 }
+
+export async function updateSwapStatus(swapId: string, status: string, starknetData?: {
+  starknetTxHash?: string;
+  starknetSwapId?: string;
+}) {
+  const response = await fetch(`${API_BASE}/swap/${swapId}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, ...starknetData }),
+  });
+  return response.json();
+}

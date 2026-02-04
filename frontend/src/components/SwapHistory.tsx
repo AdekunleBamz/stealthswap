@@ -31,22 +31,41 @@ export function SwapHistory() {
             const existingTimelock = existing?.btcHtlc?.timelock ?? 0;
             const mergedTimelock = existingTimelock > now ? existingTimelock : fallbackTimelock;
 
+            // Prioritize local status if it's further along in the flow
+            const statusPriority: Record<string, number> = {
+              'initiated': 1,
+              'btc_locked': 2,
+              'starknet_locked': 3,
+              'completed': 4,
+              'refunded': 4,
+              'failed': 0,
+            };
+            const existingPriority = statusPriority[existing?.status || ''] || 0;
+            const backendPriority = statusPriority[swap.status || ''] || 0;
+            const mergedStatus = existingPriority >= backendPriority ? (existing?.status || swap.status) : swap.status;
+
             return {
               ...existing,
               id: swap.id,
-              status: swap.status,
+              status: mergedStatus,
               privacyScore: swap.privacyScore ?? existing?.privacyScore ?? 0,
               createdAt: swap.createdAt ?? existing?.createdAt ?? Date.now(),
+              // Preserve local starknet data - this is crucial!
+              starknetTxHash: existing?.starknetTxHash || swap.starknetTxHash,
+              starknetSwapId: existing?.starknetSwapId || swap.starknetSwapId,
+              starknetAmountCommitment: existing?.starknetAmountCommitment || swap.starknetAmountCommitment,
+              starknetTimelock: existing?.starknetTimelock || swap.starknetTimelock,
               btcHtlc: {
                 ...existing?.btcHtlc,
                 id: swap.id,
                 sender: existing?.btcHtlc?.sender ?? 'testnet',
                 receiver: existing?.btcHtlc?.receiver ?? 'testnet',
                 amount: mergedAmount,
-                hashlock: existing?.btcHtlc?.hashlock ?? '',
+                hashlock: existing?.btcHtlc?.hashlock ?? swap.hashlock ?? '',
                 timelock: mergedTimelock,
                 status: existing?.btcHtlc?.status ?? 'pending',
                 createdAt: existing?.btcHtlc?.createdAt ?? swap.createdAt ?? Date.now(),
+                txid: existing?.btcHtlc?.txid || swap.txid,
               },
             };
           });

@@ -7,7 +7,7 @@ import { useCountdown } from '../hooks/useCountdown';
 import { useSwapStore } from '../store/swapStore';
 import { formatBTC, getStatusColor, getStatusBgColor, shortenAddress, copyToClipboard } from '../utils/format';
 import { completeOnchainSwap, getLatestUserSwapId, getStarknetTxUrl, getSwapFromContract, getSwapIdFromTx, initiateOnchainSwap, lockOnchainSwap, randomFelt, refundOnchainSwap } from '../utils/starknet';
-import { getSwap, linkStarknetSwap, resolveStarknetSwapId } from '../utils/api';
+import { getSwap, linkStarknetSwap, resolveStarknetSwapId, updateSwapStatus as updateSwapStatusApi } from '../utils/api';
 import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
 
@@ -232,6 +232,17 @@ export function SwapStatus({ swap }: SwapStatusProps) {
       });
 
       updateSwapStatus(swap.id, 'starknet_locked');
+      
+      // Also update backend status
+      try {
+        await updateSwapStatusApi(swap.id, 'starknet_locked', {
+          starknetTxHash: swap.starknetTxHash,
+          starknetSwapId: swapId,
+        });
+      } catch (e) {
+        console.log('Backend status update failed (non-critical):', e);
+      }
+      
       toast.success('Swap locked on Starknet');
     } catch (error) {
       console.error(error);
@@ -306,6 +317,17 @@ export function SwapStatus({ swap }: SwapStatusProps) {
 
       await completeOnchainSwap(starknet, swapId, preimageFelt);
       updateSwapStatus(swap.id, 'completed');
+      
+      // Also update backend status
+      try {
+        await updateSwapStatusApi(swap.id, 'completed', {
+          starknetTxHash: swap.starknetTxHash,
+          starknetSwapId: swapId,
+        });
+      } catch (e) {
+        console.log('Backend status update failed (non-critical):', e);
+      }
+      
       toast.success('Swap completed on Starknet');
     } catch (error) {
       console.error('Complete swap error:', error);
