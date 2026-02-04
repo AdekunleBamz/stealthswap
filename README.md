@@ -9,6 +9,10 @@
 
 StealthSwap enables **privacy-preserving atomic swaps** between Bitcoin and Starknet. Using STARK-friendly cryptographic commitments (Poseidon hashes), we hide swap amounts and break the on-chain link between sender and receiver identities.
 
+### Why Starknet?
+
+Starknet's STARK-based execution enables scalable, quantum-safe verification of privacy commitments without trusted setup — making it uniquely suited for Bitcoin-integrated privacy applications. Cairo's native support for Poseidon hashes allows efficient on-chain commitment verification.
+
 ### Key Features
 
 - 🔐 **Amount Privacy**: Swap amounts hidden via ZK commitments
@@ -161,6 +165,35 @@ Revealing the preimage:
 | **Nullifiers** | Prevent replay attacks and double-spending |
 | **Timelock Variance** | Non-standard durations resist timing analysis |
 | **No Direct Links** | Hashlock is only on-chain correlation |
+
+### Privacy Score Calculation
+
+The dashboard displays a real-time privacy score (0-100) based on:
+
+- **Timelock Duration** (+30 pts max): Longer timelocks increase anonymity set
+- **Amount Entropy** (+30 pts max): Non-round amounts resist pattern matching
+- **Timing Variance** (+20 pts max): Random delays reduce correlation risk
+- **Network Activity** (+20 pts max): Higher overall volume improves privacy
+
+The scoring is heuristic-based, designed to guide users toward privacy-optimal choices.
+
+## 🔍 Privacy Model & Limitations
+
+**StealthSwap protects against:**
+- ✅ Swap amount disclosure (hidden via commitments)
+- ✅ Direct on-chain address correlation between BTC and Starknet
+- ✅ Replay attacks (nullifier-based prevention)
+
+**Does NOT yet protect against:**
+- ⚠️ Network-level observers (IP correlation)
+- ⚠️ Backend operator correlation (centralized coordinator)
+- ⚠️ Advanced timing analysis (swap initiation patterns)
+
+**Future roadmap:**
+- Fully client-side proof generation
+- Decentralized relayer network
+- Multi-hop privacy routing
+- Tor/mixnet integration
 
 ## 🧪 Testing
 
