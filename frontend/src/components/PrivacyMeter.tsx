@@ -43,7 +43,9 @@ export function PrivacyMeter({ score }: PrivacyMeterProps) {
         </div>
         <div>
           <h3 className="text-lg font-semibold text-white">Privacy Score</h3>
-          <p className="text-sm text-gray-400">Swap anonymity level</p>
+          <p className="text-sm text-gray-400" title="Heuristic UX indicator based on timelock, amount entropy, and timing factors. Not a formal anonymity metric.">
+            Swap anonymity level <span className="text-gray-500 cursor-help">ⓘ</span>
+          </p>
         </div>
       </div>
 

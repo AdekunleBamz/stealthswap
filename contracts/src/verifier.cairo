@@ -35,7 +35,8 @@ pub mod Verifier {
 
     #[storage]
     struct Storage {
-        // Used nullifiers to prevent double-spending
+        // Note: Nullifier tracking is handled by StealthSwap contract, not here.
+        // This storage exists for potential standalone verifier use cases.
         used_nullifiers: Map<felt252, bool>,
     }
 

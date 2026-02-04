@@ -19,6 +19,8 @@ pub enum SwapStatus {
     Locked,
     Completed,
     Refunded,
+    /// Note: Expired is a derived status - swaps are not automatically marked expired on-chain.
+    /// Use is_swap_expired() to check, or call refund_swap() which handles expired swaps.
     Expired,
 }
 

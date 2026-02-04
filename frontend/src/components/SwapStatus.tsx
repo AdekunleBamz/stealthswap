@@ -16,7 +16,7 @@ interface SwapStatusProps {
 }
 
 export function SwapStatus({ swap }: SwapStatusProps) {
-  const { preimage, starknetPreimage, updateSwapStatus, updateSwap } = useSwapStore();
+  const { preimage, starknetPreimage, setStarknetPreimage, updateSwapStatus, updateSwap } = useSwapStore();
   const { starknet, address } = useWallet();
   const { formatted, isExpired, hours, minutes, seconds } = useCountdown(swap.btcHtlc.timelock);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -269,7 +269,29 @@ export function SwapStatus({ swap }: SwapStatusProps) {
     console.log('starknetPreimage from store:', starknetPreimage);
 
     // Use starknetPreimage (Poseidon-compatible) if available, otherwise fall back to preimage
-    const preimageToUse = starknetPreimage || preimage;
+    let preimageToUse = starknetPreimage || preimage;
+    
+    // If no preimage in store, try to fetch from backend
+    if (!preimageToUse && swap.id) {
+      console.log('No preimage in store, fetching from backend...');
+      try {
+        const swapDetails = await getSwap(swap.id);
+        if (swapDetails?.secrets?.starknetPreimage) {
+          preimageToUse = swapDetails.secrets.starknetPreimage;
+          setStarknetPreimage(preimageToUse);
+          console.log('Recovered starknetPreimage from backend:', preimageToUse);
+        } else if (swapDetails?.secrets?.preimage) {
+          // Generate starknetPreimage from raw preimage
+          const rawPreimage = swapDetails.secrets.preimage;
+          preimageToUse = '0x' + rawPreimage.replace('0x', '').slice(0, 62);
+          setStarknetPreimage(preimageToUse);
+          console.log('Generated starknetPreimage from raw preimage:', preimageToUse);
+        }
+      } catch (err) {
+        console.error('Failed to fetch preimage from backend:', err);
+      }
+    }
+    
     if (!preimageToUse) {
       toast.error('Missing preimage. Check if it was saved during swap initiation.');
       return;

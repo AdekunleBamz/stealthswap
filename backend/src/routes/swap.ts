@@ -137,6 +137,12 @@ swapRouter.post('/initiate', async (req: Request, res: Response) => {
         amountCommitment,
         blindingFactor,
         swapId: null,
+        txHash: null as string | null,
+      },
+      // Store secrets for recovery (in production, encrypt or use secure storage)
+      secrets: {
+        preimage,
+        starknetPreimage: null as string | null, // Set after hashlock generation
       },
       privacyScore: calculatePrivacyScore(amountSats, lockBlocks),
       createdAt: Date.now(),
@@ -180,6 +186,10 @@ swapRouter.post('/initiate', async (req: Request, res: Response) => {
       return '0x' + (hex.length > 63 ? hex.slice(0, 63) : hex);
     };
     const starknetHashlock = truncateToFelt252(rawStarknetHashlock);
+
+    // Save starknet preimage to swap for recovery
+    swap.secrets.starknetPreimage = starknetPreimage;
+    swaps.set(swapId, swap);
 
     res.json({
       success: true,
@@ -562,6 +572,12 @@ swapRouter.get('/:id', async (req: Request, res: Response) => {
         swapId: swap.starknet.swapId,
         txHash: swap.starknet.txHash,
       },
+      // Include secrets for recovery (only if swap is not completed)
+      secrets: swap.status !== 'completed' && swap.secrets ? {
+        preimage: swap.secrets.preimage,
+        starknetPreimage: swap.secrets.starknetPreimage,
+        warning: 'KEEP THESE SECRET! Only reveal preimage when completing the swap.',
+      } : undefined,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to fetch swap' });

@@ -189,11 +189,15 @@ The scoring is heuristic-based, designed to guide users toward privacy-optimal c
 - ⚠️ Backend operator correlation (centralized coordinator)
 - ⚠️ Advanced timing analysis (swap initiation patterns)
 
+**Cross-chain hash compatibility:**
+Due to Bitcoin's SHA256 and Starknet's Poseidon hash differences, StealthSwap currently relies on a relayer model to propagate preimage revelations across chains. The backend service observes Bitcoin preimage revelation and submits the corresponding Starknet preimage. Future versions will explore unified hash primitives or ZK-based hash adapters.
+
 **Future roadmap:**
 - Fully client-side proof generation
 - Decentralized relayer network
 - Multi-hop privacy routing
 - Tor/mixnet integration
+- Unified cross-chain hash primitives
 
 ## 🧪 Testing
 
@@ -274,4 +278,4 @@ Built with 💜 for the Starknet RE{DEFINE} Hackathon 2026
 
 ---
 
-**Starknet Wallet Address**: *(to be added)*
+**Starknet Wallet Address**: `0x01c047c74eC56B8B6AD34893029f37AcaB9ac24574f2DB5fC4819B581935E507`

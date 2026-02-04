@@ -56,7 +56,8 @@ pub mod StealthSwap {
         user_swap_count: Map<ContractAddress, u64>,
         user_swaps: Map<(ContractAddress, u64), felt252>,
         
-        // Privacy: used nullifiers
+        // Privacy: used nullifiers to prevent replay attacks
+        // Note: Tracked here in StealthSwap (not in Verifier) since swap state is managed here
         used_nullifiers: Map<felt252, bool>,
         
         // Contract owner
@@ -172,13 +173,15 @@ pub mod StealthSwap {
             swap_id
         }
 
-        /// Locks the swap with a ZK proof of the amount commitment
+        /// Locks the swap with a ZK-style proof of the amount commitment
         fn lock_swap(ref self: ContractState, swap_id: felt252, proof: SwapProof) {
             let mut swap = self.swaps.entry(swap_id).read();
             let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
             
             // Validations
             assert(swap.status == SwapStatus::Pending, 'Swap not pending');
+            assert(timestamp <= swap.timelock, 'Swap expired');
             assert(
                 caller == swap.initiator || caller == swap.participant,
                 'Not authorized'
