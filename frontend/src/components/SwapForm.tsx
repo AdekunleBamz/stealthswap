@@ -6,6 +6,7 @@ import { useWallet } from '../hooks/useWallet';
 import { initiateSwap, linkStarknetSwap } from '../utils/api';
 import { initiateOnchainSwap } from '../utils/starknet';
 import toast from 'react-hot-toast';
+import type { Swap, HTLCStatus, SwapStatus } from '../types';
 
 export function SwapForm() {
   const { addSwap, setPreimage, setStarknetPreimage, setLoading, isLoading } = useSwapStore();
@@ -15,7 +16,7 @@ export function SwapForm() {
   const [btcAddress, setBtcAddress] = useState('');
   const [timelockMinutes, setTimelockMinutes] = useState(60);
 
-  const buildSwapFromResponse = (response: any, inputAmount: string) => {
+  const buildSwapFromResponse = (response: any, inputAmount: string): Swap => {
     const now = Math.floor(Date.now() / 1000);
     const timelock = response?.starknet?.timelockTimestamp ?? (now + timelockMinutes * 60);
     // Store amount in satoshis for formatBTC to work correctly
@@ -23,17 +24,18 @@ export function SwapForm() {
     const amountSats = Math.floor(btcValue * 100_000_000);
     return {
       id: response?.swap?.id,
-      status: response?.swap?.status ?? 'initiated',
+      status: (response?.swap?.status ?? 'initiated') as SwapStatus,
       privacyScore: response?.swap?.privacyScore ?? 0,
       createdAt: response?.swap?.createdAt ?? Date.now(),
+      starknetTxHash: response?.starknet?.txHash,
       btcHtlc: {
         id: response?.btc?.htlcAddress ?? response?.swap?.id,
         sender: btcAddress || 'testnet',
         receiver: address || '',
-        amount: amountSats,
+        amount: amountSats.toString(),
         hashlock: response?.starknet?.hashlock ?? '',
         timelock,
-        status: 'pending',
+        status: 'pending' as HTLCStatus,
         createdAt: response?.swap?.createdAt ?? Date.now(),
         txid: response?.btc?.fundingTx?.txid,
       },

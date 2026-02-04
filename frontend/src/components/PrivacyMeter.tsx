@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Shield, Eye, EyeOff, TrendingUp } from 'lucide-react';
+import { Shield, EyeOff, TrendingUp } from 'lucide-react';
 import { getPrivacyScoreColor, getPrivacyScoreLabel } from '../utils/format';
 
 interface PrivacyMeterProps {
