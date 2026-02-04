@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { Header } from './components/Header';
 import { SwapForm } from './components/SwapForm';
@@ -6,8 +7,23 @@ import { SwapHistory } from './components/SwapHistory';
 import { PrivacyMeter } from './components/PrivacyMeter';
 import { useSwapStore } from './store/swapStore';
 
+// Keep backend alive (Render free tier sleeps after 15min inactivity)
+const API_BASE = import.meta.env.VITE_API_URL || '';
+const keepBackendAlive = () => {
+  if (API_BASE) {
+    fetch(`${API_BASE}/health`).catch(() => {});
+  }
+};
+
 function App() {
   const { activeSwap } = useSwapStore();
+
+  // Ping backend every 5 minutes to prevent Render sleep
+  useEffect(() => {
+    keepBackendAlive();
+    const interval = setInterval(keepBackendAlive, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen">
