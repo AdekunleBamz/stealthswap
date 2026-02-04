@@ -1,9 +1,14 @@
 import { motion } from 'framer-motion';
-import { Clock, CheckCircle2, XCircle, Lock, ArrowRight, Copy, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { Clock, CheckCircle2, XCircle, Lock, Copy, ExternalLink, RefreshCw } from 'lucide-react';
+import { hash } from 'starknet';
 import { Swap } from '../types';
 import { useCountdown } from '../hooks/useCountdown';
 import { useSwapStore } from '../store/swapStore';
 import { formatBTC, getStatusColor, getStatusBgColor, shortenAddress, copyToClipboard } from '../utils/format';
+import { completeOnchainSwap, getLatestUserSwapId, getStarknetTxUrl, getSwapFromContract, getSwapIdFromTx, initiateOnchainSwap, lockOnchainSwap, randomFelt, refundOnchainSwap } from '../utils/starknet';
+import { getSwap, linkStarknetSwap, resolveStarknetSwapId } from '../utils/api';
+import { useWallet } from '../hooks/useWallet';
 import toast from 'react-hot-toast';
 
 interface SwapStatusProps {
@@ -11,12 +16,323 @@ interface SwapStatusProps {
 }
 
 export function SwapStatus({ swap }: SwapStatusProps) {
-  const { preimage } = useSwapStore();
+  const { preimage, starknetPreimage, updateSwapStatus, updateSwap } = useSwapStore();
+  const { starknet, address } = useWallet();
   const { formatted, isExpired, hours, minutes, seconds } = useCountdown(swap.btcHtlc.timelock);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isLocking, setIsLocking] = useState(false);
+
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number) => {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('timeout')), ms);
+      promise
+        .then((value) => {
+          clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((error) => {
+          clearTimeout(timer);
+          reject(error);
+        });
+    });
+  };
+
+  const handleRetryStarknetInit = async () => {
+    if (!starknet || !address) {
+      toast.error('Connect your Starknet wallet first');
+      return;
+    }
+
+    setIsRetrying(true);
+    try {
+      // Try to fetch fresh swap data from backend, but fall back to local data
+      let amountHash = swap.starknetAmountCommitment;
+      let hashlock = swap.btcHtlc.hashlock;
+      // ALWAYS use a future timelock (1 hour from now + 5 min safety margin)
+      let timelock = Math.floor(Date.now() / 1000) + 3600 + 300;
+
+      try {
+        const backendSwap = await getSwap(swap.id);
+        if (backendSwap.success) {
+          amountHash = backendSwap.starknet?.amountCommitment || amountHash;
+          hashlock = backendSwap.starknet?.hashlock || backendSwap.btc?.hashlock || hashlock;
+          // Only use backend timelock if it's still in the future
+          const backendTimelock = backendSwap.starknet?.timelockTimestamp;
+          if (backendTimelock && backendTimelock > Math.floor(Date.now() / 1000) + 60) {
+            timelock = backendTimelock;
+          }
+        }
+      } catch (e) {
+        console.log('Backend fetch failed, using local swap data');
+      }
+
+      // Generate amountHash if missing (for demo purposes)
+      if (!amountHash) {
+        const { computePoseidonHashOnElements } = await import('starknet').then(m => ({ computePoseidonHashOnElements: m.hash.computePoseidonHashOnElements }));
+        const blindingFactor = randomFelt();
+        // Amount is already in satoshis
+        const amountSats = typeof swap.btcHtlc.amount === 'number' ? swap.btcHtlc.amount : (parseInt(swap.btcHtlc.amount) || 100000);
+        amountHash = computePoseidonHashOnElements([amountSats.toString(), blindingFactor]);
+        console.log('Generated amountHash:', amountHash);
+      }
+
+      // Generate hashlock if missing
+      if (!hashlock) {
+        hashlock = randomFelt();
+        console.log('Generated hashlock:', hashlock);
+      }
+
+      console.log('Initiating Starknet swap with:', { participant: address, amountHash, hashlock, timelock });
+
+      const onchain = await initiateOnchainSwap(starknet, {
+        participant: address,
+        amountHash,
+        hashlock: hashlock.startsWith('0x') ? hashlock : `0x${hashlock}`,
+        timelock,
+      });
+
+      console.log('Starknet initiate result:', onchain);
+
+      updateSwap(swap.id, {
+        starknetTxHash: onchain.txHash,
+        starknetSwapId: onchain.swapId,
+        starknetAmountCommitment: amountHash,
+        starknetTimelock: timelock,
+      });
+
+      if (onchain.swapId) {
+        await linkStarknetSwap(swap.id, onchain.swapId, onchain.txHash);
+      }
+
+      toast.success('Starknet swap initiated!');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to initiate on Starknet');
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   const handleCopy = (text: string, label: string) => {
     copyToClipboard(text);
     toast.success(`${label} copied to clipboard`);
+  };
+
+  const resolveSwapId = async () => {
+    if (swap.starknetSwapId) return swap.starknetSwapId;
+    if (!starknet) return undefined;
+
+    // Prefer: resolve via backend (avoids browser CORS)
+    if (swap.starknetTxHash) {
+      try {
+        const resolved = await resolveStarknetSwapId(swap.id, swap.starknetTxHash);
+        if (resolved?.swapId) {
+          updateSwap(swap.id, { starknetSwapId: resolved.swapId });
+          return resolved.swapId;
+        }
+      } catch (error) {
+        console.error('Failed to resolve swap ID via backend:', error);
+      }
+    }
+
+    // Fallback: get latest swap ID for this user from contract
+    if (address) {
+      try {
+        const latestSwapId = await getLatestUserSwapId(starknet, address);
+        if (latestSwapId) {
+          updateSwap(swap.id, { starknetSwapId: latestSwapId });
+          return latestSwapId;
+        }
+      } catch (error) {
+        console.error('Failed to resolve swap ID via contract:', error);
+      }
+    }
+
+    // Last resort: try tx receipt directly
+    if (swap.starknetTxHash) {
+      try {
+        const resolved = await getSwapIdFromTx(starknet, swap.starknetTxHash);
+        if (resolved) {
+          updateSwap(swap.id, { starknetSwapId: resolved });
+          return resolved;
+        }
+      } catch (error) {
+        console.error('Failed to resolve swap ID via tx receipt:', error);
+      }
+    }
+
+    return undefined;
+  };
+
+  const handleLockOnStarknet = async () => {
+    if (!starknet) {
+      toast.error('Connect your Starknet wallet first');
+      return;
+    }
+
+    if (!swap.starknetTxHash) {
+      toast.error('Initiate the Starknet swap first');
+      return;
+    }
+
+    setIsLocking(true);
+    toast.loading('Resolving swap ID from transaction...', { id: 'lock-loading' });
+
+    let swapId: string | undefined;
+    try {
+      // Wait longer for tx confirmation - up to 30 seconds
+      swapId = await withTimeout(resolveSwapId(), 30000);
+    } catch (error) {
+      toast.dismiss('lock-loading');
+      toast.error('Transaction still pending. Wait 30 seconds for confirmation, then try again.');
+      setIsLocking(false);
+      return;
+    }
+
+    if (!swapId || !swap.starknetAmountCommitment) {
+      toast.dismiss('lock-loading');
+      toast.error('Waiting for Starknet confirmation. Try again in a minute.');
+      setIsLocking(false);
+      return;
+    }
+
+    toast.dismiss('lock-loading');
+
+    try {
+      // Get the actual amount_hash from the contract to ensure it matches
+      const contractSwap = await getSwapFromContract(starknet, swapId);
+      console.log('Contract swap data:', contractSwap);
+      
+      if (!contractSwap) {
+        toast.error('Could not read swap from contract');
+        setIsLocking(false);
+        return;
+      }
+
+      if (contractSwap.status !== 0) {
+        toast.error(`Swap is not pending (status: ${contractSwap.status})`);
+        setIsLocking(false);
+        return;
+      }
+
+      // Use the amount_hash from the contract, not the local value
+      const amountCommitment = contractSwap.amount_hash;
+      console.log('Using amount_hash from contract:', amountCommitment);
+
+      const nullifier = randomFelt();
+      const proofHash = hash.computePoseidonHashOnElements([
+        amountCommitment,
+        nullifier,
+      ]);
+
+      await lockOnchainSwap(starknet, swapId, {
+        amount_commitment: amountCommitment,
+        nullifier,
+        proof_hash: proofHash,
+      });
+
+      updateSwapStatus(swap.id, 'starknet_locked');
+      toast.success('Swap locked on Starknet');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to lock on Starknet');
+    } finally {
+      setIsLocking(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!starknet) {
+      toast.error('Connect your Starknet wallet first');
+      return;
+    }
+
+    const swapId = await resolveSwapId();
+    if (!swapId) {
+      toast.error('Missing Starknet swap ID');
+      return;
+    }
+
+    console.log('=== Complete Swap Debug ===');
+    console.log('preimage from store:', preimage);
+    console.log('starknetPreimage from store:', starknetPreimage);
+
+    // Use starknetPreimage (Poseidon-compatible) if available, otherwise fall back to preimage
+    const preimageToUse = starknetPreimage || preimage;
+    if (!preimageToUse) {
+      toast.error('Missing preimage. Check if it was saved during swap initiation.');
+      return;
+    }
+
+    try {
+      // First, verify the preimage matches the hashlock
+      const contractSwap = await getSwapFromContract(starknet, swapId);
+      console.log('Contract swap for complete:', contractSwap);
+      
+      if (contractSwap?.status !== 1) {
+        toast.error(`Swap is not locked (status: ${contractSwap?.status})`);
+        return;
+      }
+
+      const preimageFelt = preimageToUse.startsWith('0x') ? preimageToUse : `0x${preimageToUse}`;
+      
+      // Verify hash matches - normalize both to lowercase for comparison
+      // Note: felt252 can only hold 252 bits (63 hex chars), so hashes may be truncated
+      const computedHash = hash.computePoseidonHashOnElements([preimageFelt]);
+      const contractHashlock = contractSwap?.hashlock || '';
+      
+      // Truncate computed hash to match felt252 storage (63 hex chars max after 0x)
+      const truncateToFelt = (h: string) => {
+        const hex = h.replace('0x', '');
+        return '0x' + (hex.length > 63 ? hex.slice(0, 63) : hex);
+      };
+      
+      const normalizedComputed = truncateToFelt(computedHash).toLowerCase();
+      const normalizedExpected = truncateToFelt(contractHashlock).toLowerCase();
+      
+      console.log('Preimage being used:', preimageFelt);
+      console.log('Computed hash (full):', computedHash);
+      console.log('Contract hashlock:', contractHashlock);
+      console.log('Normalized computed (truncated):', normalizedComputed);
+      console.log('Normalized expected (truncated):', normalizedExpected);
+      console.log('Match:', normalizedComputed === normalizedExpected);
+      
+      if (normalizedComputed !== normalizedExpected) {
+        console.error('Hash mismatch! The preimage does not match the hashlock.');
+        console.error('This may indicate the preimage was not saved correctly during initiation.');
+        toast.error('Preimage verification failed. Hash does not match.');
+        return;
+      }
+
+      await completeOnchainSwap(starknet, swapId, preimageFelt);
+      updateSwapStatus(swap.id, 'completed');
+      toast.success('Swap completed on Starknet');
+    } catch (error) {
+      console.error('Complete swap error:', error);
+      toast.error('Failed to complete swap');
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!starknet) {
+      toast.error('Connect your Starknet wallet first');
+      return;
+    }
+
+    const swapId = await resolveSwapId();
+    if (!swapId) {
+      toast.error('Missing Starknet swap ID');
+      return;
+    }
+
+    try {
+      await refundOnchainSwap(starknet, swapId);
+      updateSwapStatus(swap.id, 'refunded');
+      toast.success('Swap refunded on Starknet');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to refund swap');
+    }
   };
 
   const steps = [
@@ -189,19 +505,61 @@ export function SwapStatus({ swap }: SwapStatusProps) {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 mt-6">
-        <button className="flex-1 py-3 rounded-lg bg-stark-600 hover:bg-stark-500 text-white font-medium transition-colors flex items-center justify-center gap-2">
-          <ExternalLink className="w-4 h-4" />
-          View on Starknet
-        </button>
+      <div className="flex flex-wrap gap-3 mt-6">
+        {swap.starknetTxHash ? (
+          <>
+            <a
+              href={getStarknetTxUrl(swap.starknetTxHash)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 py-3 rounded-lg bg-stark-600 hover:bg-stark-500 text-white font-medium transition-colors flex items-center justify-center gap-2"
+            >
+              <ExternalLink className="w-4 h-4" />
+              View on Starknet
+            </a>
+            {!swap.starknetSwapId && (
+              <div className="w-full text-center text-sm text-yellow-400 mt-2">
+                ⏳ Waiting for transaction confirmation... (check Voyager for status)
+              </div>
+            )}
+          </>
+        ) : (
+          <button
+            onClick={handleRetryStarknetInit}
+            disabled={isRetrying}
+            className="flex-1 py-3 rounded-lg bg-stark-600 hover:bg-stark-500 text-white font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+            {isRetrying ? 'Initiating...' : 'Init on Starknet'}
+          </button>
+        )}
+
+        {['initiated', 'btc_locked'].includes(swap.status) && swap.starknetAmountCommitment && swap.starknetTxHash && (
+          <button
+            onClick={handleLockOnStarknet}
+            disabled={isLocking}
+            className="flex-1 py-3 rounded-lg bg-privacy-600 hover:bg-privacy-500 text-white font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <Lock className="w-4 h-4" />
+            {isLocking ? 'Locking...' : 'Lock on Starknet'}
+          </button>
+        )}
+
         {swap.status === 'starknet_locked' && !isExpired && (
-          <button className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium transition-colors flex items-center justify-center gap-2">
+          <button
+            onClick={handleComplete}
+            className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-500 text-white font-medium transition-colors flex items-center justify-center gap-2"
+          >
             <CheckCircle2 className="w-4 h-4" />
             Complete Swap
           </button>
         )}
+
         {isExpired && swap.status !== 'completed' && (
-          <button className="flex-1 py-3 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors flex items-center justify-center gap-2">
+          <button
+            onClick={handleRefund}
+            className="flex-1 py-3 rounded-lg bg-red-600 hover:bg-red-500 text-white font-medium transition-colors flex items-center justify-center gap-2"
+          >
             <XCircle className="w-4 h-4" />
             Refund
           </button>

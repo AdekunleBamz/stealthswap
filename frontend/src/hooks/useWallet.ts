@@ -16,6 +16,7 @@ export function useWallet() {
           address: address || null,
           isConnected: true,
           chainId: starknet.chainId,
+          starknet,
         });
       }
     } catch (error) {
@@ -31,6 +32,7 @@ export function useWallet() {
       setWallet({
         address: null,
         isConnected: false,
+        starknet: undefined,
       });
     } catch (error) {
       console.error('Failed to disconnect wallet:', error);
@@ -47,6 +49,7 @@ export function useWallet() {
             address: starknet.selectedAddress || null,
             isConnected: true,
             chainId: starknet.chainId,
+            starknet,
           });
         }
       } catch (error) {

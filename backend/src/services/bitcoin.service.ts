@@ -15,7 +15,15 @@ const bip32 = BIP32Factory(ecc);
 const TESTNET = bitcoin.networks.testnet;
 
 // Blockstream Testnet API
-const BLOCKSTREAM_API = 'https://blockstream.info/testnet/api';
+const BLOCKSTREAM_API =
+  process.env.BLOCKSTREAM_API_BASE || 'https://blockstream.info/testnet/api';
+const BLOCKSTREAM_API_KEY = process.env.BLOCKSTREAM_API_KEY;
+
+let cachedBlockHeight = 0;
+let lastHeightFetchMs = 0;
+const HEIGHT_CACHE_TTL_MS = 30_000;
+let lastHeightErrorMs = 0;
+const HEIGHT_ERROR_COOLDOWN_MS = 5 * 60_000;
 
 export interface BitcoinWallet {
   address: string;
@@ -84,6 +92,7 @@ export function walletFromMnemonic(mnemonic: string, index: number = 0): Bitcoin
 
 /**
  * Generate a random preimage and its SHA256 hash (hashlock)
+ * Note: This is for Bitcoin HTLC. For Starknet, use generateStarknetHashlock()
  */
 export function generateHashlock(): { preimage: string; hashlock: string } {
   const preimage = crypto.randomBytes(32);
@@ -93,6 +102,16 @@ export function generateHashlock(): { preimage: string; hashlock: string } {
     preimage: preimage.toString('hex'),
     hashlock: hashlock.toString('hex'),
   };
+}
+
+/**
+ * Generate a random preimage as a felt252-safe hex string (31 bytes)
+ * Returns just the preimage - the hashlock should be computed on-chain or via starknet.js
+ */
+export function generateStarknetPreimage(): string {
+  // Use 31 bytes (248 bits) to fit safely in felt252
+  const preimage = crypto.randomBytes(31);
+  return '0x' + preimage.toString('hex');
 }
 
 /**
@@ -129,11 +148,27 @@ export async function getBalance(address: string): Promise<number> {
  */
 export async function getBlockHeight(): Promise<number> {
   try {
-    const response = await axios.get(`${BLOCKSTREAM_API}/blocks/tip/height`);
-    return response.data;
+    const now = Date.now();
+    if (lastHeightErrorMs && now - lastHeightErrorMs < HEIGHT_ERROR_COOLDOWN_MS) {
+      return cachedBlockHeight || 0;
+    }
+    if (cachedBlockHeight > 0 && now - lastHeightFetchMs < HEIGHT_CACHE_TTL_MS) {
+      return cachedBlockHeight;
+    }
+
+    const response = await axios.get(`${BLOCKSTREAM_API}/blocks/tip/height`, {
+      headers: BLOCKSTREAM_API_KEY ? { 'x-api-key': BLOCKSTREAM_API_KEY } : undefined,
+    });
+    cachedBlockHeight = response.data;
+    lastHeightFetchMs = now;
+    return cachedBlockHeight;
   } catch (error) {
-    console.error('Failed to fetch block height:', error);
-    return 0;
+    lastHeightErrorMs = Date.now();
+    const status = (error as any)?.response?.status;
+    if (status !== 429) {
+      console.error('Failed to fetch block height:', error);
+    }
+    return cachedBlockHeight || 0;
   }
 }
 

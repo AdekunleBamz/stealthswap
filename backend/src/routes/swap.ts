@@ -1,11 +1,21 @@
 import { Router } from 'express';
 import * as btcService from '../services/bitcoin.service.js';
-import { hash } from 'starknet';
+import { RpcProvider, hash } from 'starknet';
 
 export const swapRouter = Router();
 
 // In-memory storage for swaps
 const swaps = new Map<string, any>();
+
+const STARKNET_RPC_URL =
+  process.env.STARKNET_RPC_URL || 'https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_7/demo';
+
+function parseSwapIdFromReceipt(receipt: any) {
+  const selector = hash.getSelectorFromName('SwapInitiated');
+  const events = receipt?.events || [];
+  const match = events.find((event: any) => event?.keys?.[0] === selector);
+  return match?.keys?.[1];
+}
 
 /**
  * Calculate privacy score based on swap parameters
@@ -36,32 +46,55 @@ swapRouter.post('/initiate', async (req, res) => {
     const {
       senderWIF,
       senderPubKey,
+      senderBtcAddress,
       recipientStarknetAddress,
+      receiverStarknetAddress, // Alternative field name from frontend
       recipientBtcPubKey,
       btcAmountSats,
+      btcAmount, // Alternative: BTC as string (e.g., "0.001")
       timelockBlocks = 144, // Default ~24 hours
+      timelockMinutes, // Alternative: minutes instead of blocks
     } = req.body;
 
-    // Validate required fields
-    if (!senderPubKey || !recipientStarknetAddress || !recipientBtcPubKey || !btcAmountSats) {
+    // Support alternative field names from frontend
+    const starknetAddress = recipientStarknetAddress || receiverStarknetAddress;
+    
+    // Convert BTC string to satoshis if needed
+    let amountSats = btcAmountSats;
+    if (!amountSats && btcAmount) {
+      amountSats = Math.floor(parseFloat(btcAmount) * 100_000_000);
+    }
+    
+    // Convert minutes to blocks if needed (1 block ≈ 10 minutes)
+    let lockBlocks = timelockBlocks;
+    if (timelockMinutes) {
+      lockBlocks = Math.ceil(timelockMinutes / 10);
+    }
+
+    // Validate required fields - only need starknet address and amount
+    if (!starknetAddress || !amountSats) {
       return res.status(400).json({
         error: 'Missing required fields',
-        required: ['senderPubKey', 'recipientStarknetAddress', 'recipientBtcPubKey', 'btcAmountSats'],
-        optional: ['senderWIF', 'timelockBlocks'],
+        required: ['receiverStarknetAddress (or recipientStarknetAddress)', 'btcAmount (or btcAmountSats)'],
+        optional: ['senderBtcAddress', 'senderPubKey', 'recipientBtcPubKey', 'timelockMinutes', 'timelockBlocks'],
       });
     }
+    
+    // Generate demo keys if not provided (for hackathon demo)
+    const demoSenderPubKey = senderPubKey || btcService.generateWallet().publicKey;
+    const demoRecipientPubKey = recipientBtcPubKey || btcService.generateWallet().publicKey;
 
     // Generate hashlock (preimage/secret)
     const { preimage, hashlock } = btcService.generateHashlock();
 
     // Get current block height
     const currentHeight = await btcService.getBlockHeight();
-    const timelock = currentHeight + timelockBlocks;
+    const timelock = currentHeight + lockBlocks;
 
     // Create HTLC script
     const htlcScript = btcService.createHTLCScript({
-      recipientPubKey: Buffer.from(recipientBtcPubKey, 'hex'),
-      senderPubKey: Buffer.from(senderPubKey, 'hex'),
+      recipientPubKey: Buffer.from(demoRecipientPubKey, 'hex'),
+      senderPubKey: Buffer.from(demoSenderPubKey, 'hex'),
       hashlock: Buffer.from(hashlock, 'hex'),
       timelock,
     });
@@ -71,15 +104,17 @@ swapRouter.post('/initiate', async (req, res) => {
     // Generate amount commitment for Starknet (ZK privacy)
     const blindingFactor = '0x' + Buffer.from(btcService.generateHashlock().preimage, 'hex').toString('hex').slice(0, 64);
     const amountCommitment = hash.computePoseidonHashOnElements([
-      btcAmountSats.toString(),
+      amountSats.toString(),
       blindingFactor,
     ]);
 
     // Create swap record
+    const senderPubKeyFelt = demoSenderPubKey.startsWith('0x') ? demoSenderPubKey : `0x${demoSenderPubKey}`;
+    const hashlockFelt = hashlock.startsWith('0x') ? hashlock : `0x${hashlock}`;
     const swapId = hash.computePoseidonHashOnElements([
-      senderPubKey,
-      recipientStarknetAddress,
-      hashlock,
+      senderPubKeyFelt,
+      starknetAddress,
+      hashlockFelt,
       Date.now().toString(),
     ]);
 
@@ -89,21 +124,21 @@ swapRouter.post('/initiate', async (req, res) => {
       btc: {
         htlcAddress,
         htlcScript: htlcScript.toString('hex'),
-        senderPubKey,
-        recipientPubKey: recipientBtcPubKey,
-        amountSats: btcAmountSats,
+        senderPubKey: demoSenderPubKey,
+        recipientPubKey: demoRecipientPubKey,
+        amountSats: amountSats,
         hashlock,
         timelock,
-        timelockBlocks,
+        timelockBlocks: lockBlocks,
         fundingTxid: null as string | null,
       },
       starknet: {
-        recipientAddress: recipientStarknetAddress,
+        recipientAddress: starknetAddress,
         amountCommitment,
         blindingFactor,
         swapId: null,
       },
-      privacyScore: calculatePrivacyScore(btcAmountSats, timelockBlocks),
+      privacyScore: calculatePrivacyScore(amountSats, lockBlocks),
       createdAt: Date.now(),
     };
 
@@ -116,7 +151,7 @@ swapRouter.post('/initiate', async (req, res) => {
         const { txHex, txid } = await btcService.createHTLCFundingTx(
           senderWIF,
           htlcScript,
-          btcAmountSats
+          amountSats
         );
         swap.btc.fundingTxid = txid;
         swap.status = 'btc_tx_created';
@@ -129,6 +164,23 @@ swapRouter.post('/initiate', async (req, res) => {
       }
     }
 
+    // Calculate Starknet timelock: current time + requested minutes + 5 min safety margin
+    const starknetTimelockSeconds = timelockMinutes ? (timelockMinutes * 60) : (lockBlocks * 10 * 60);
+    const starknetTimelock = Math.floor(Date.now() / 1000) + starknetTimelockSeconds + 300; // +5 min safety margin
+
+    // Generate Starknet-compatible hashlock using Poseidon hash
+    // The preimage is a felt252-safe value (31 bytes = 62 hex chars)
+    const starknetPreimage = '0x' + Buffer.from(preimage, 'hex').toString('hex').slice(0, 62);
+    const rawStarknetHashlock = hash.computePoseidonHashOnElements([starknetPreimage]);
+    
+    // Truncate hashlock to fit felt252 (max 252 bits = 63 hex chars after 0x)
+    // This is critical because the contract stores the truncated value
+    const truncateToFelt252 = (h: string): string => {
+      const hex = h.replace('0x', '');
+      return '0x' + (hex.length > 63 ? hex.slice(0, 63) : hex);
+    };
+    const starknetHashlock = truncateToFelt252(rawStarknetHashlock);
+
     res.json({
       success: true,
       swap: {
@@ -139,21 +191,22 @@ swapRouter.post('/initiate', async (req, res) => {
       },
       btc: {
         htlcAddress,
-        amountSats: btcAmountSats,
-        amountBTC: (btcAmountSats / 100_000_000).toFixed(8),
+        amountSats: amountSats,
+        amountBTC: (amountSats / 100_000_000).toFixed(8),
         timelock,
-        timelockBlocks,
+        timelockBlocks: lockBlocks,
         currentHeight,
         fundingTx,
       },
       starknet: {
-        recipientAddress: recipientStarknetAddress,
+        recipientAddress: starknetAddress,
         amountCommitment,
-        hashlock: '0x' + hashlock,
-        timelockTimestamp: Math.floor(Date.now() / 1000) + (timelockBlocks * 10 * 60),
+        hashlock: starknetHashlock,
+        timelockTimestamp: starknetTimelock,
       },
       secrets: {
         preimage: preimage,
+        starknetPreimage: starknetPreimage,  // Use this for Starknet complete_swap
         blindingFactor,
         warning: 'KEEP THESE SECRET! Only reveal preimage when completing the swap.',
       },
@@ -241,6 +294,44 @@ swapRouter.post('/:id/link-starknet', async (req, res) => {
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to link Starknet swap' });
+  }
+});
+
+/**
+ * POST /api/swap/:id/resolve-starknet
+ * Resolve Starknet swap ID from a transaction hash (server-side RPC avoids CORS)
+ */
+swapRouter.post('/:id/resolve-starknet', async (req, res) => {
+  try {
+    const { txHash } = req.body as { txHash?: string };
+    if (!txHash) {
+      return res.status(400).json({ error: 'txHash is required' });
+    }
+
+    const provider = new RpcProvider({ nodeUrl: STARKNET_RPC_URL });
+    const receipt = await provider.getTransactionReceipt(txHash);
+    console.log('[resolve-starknet] receipt:', JSON.stringify(receipt, null, 2));
+
+    const swapId = parseSwapIdFromReceipt(receipt);
+    console.log('[resolve-starknet] parsed swapId:', swapId);
+
+    if (!swapId) {
+      // Try alternative: look for any event with keys[1]
+      const events = (receipt as any)?.events || [];
+      console.log('[resolve-starknet] events count:', events.length);
+      for (const ev of events) {
+        console.log('[resolve-starknet] event keys:', ev?.keys);
+      }
+      return res.status(202).json({
+        success: false,
+        message: 'Swap ID not found in receipt yet. Try again shortly.',
+      });
+    }
+
+    res.json({ success: true, swapId });
+  } catch (error: any) {
+    console.error('[resolve-starknet] error:', error);
+    res.status(500).json({ error: error.message || 'Failed to resolve swap ID' });
   }
 });
 
@@ -397,6 +488,7 @@ swapRouter.get('/:id', async (req, res) => {
     const blocksRemaining = Math.max(0, swap.btc.timelock - currentHeight);
 
     res.json({
+      success: true,
       swap: {
         id: swap.id,
         status: swap.status,
@@ -409,6 +501,7 @@ swapRouter.get('/:id', async (req, res) => {
         amountSats: swap.btc.amountSats,
         amountBTC: (swap.btc.amountSats / 100_000_000).toFixed(8),
         fundingTxid: swap.btc.fundingTxid,
+        hashlock: swap.btc.hashlock,
         timelock: swap.btc.timelock,
         currentHeight,
         blocksRemaining,
@@ -419,6 +512,9 @@ swapRouter.get('/:id', async (req, res) => {
       },
       starknet: {
         recipientAddress: swap.starknet.recipientAddress,
+        amountCommitment: swap.starknet.amountCommitment,
+        hashlock: '0x' + swap.btc.hashlock,
+        timelockTimestamp: Math.floor(swap.createdAt / 1000) + (swap.btc.timelockBlocks * 10 * 60),
         swapId: swap.starknet.swapId,
         txHash: swap.starknet.txHash,
       },

@@ -3,16 +3,46 @@ import { motion } from 'framer-motion';
 import { ArrowDownUp, Lock, Zap, AlertCircle } from 'lucide-react';
 import { useSwapStore } from '../store/swapStore';
 import { useWallet } from '../hooks/useWallet';
-import { initiateSwap } from '../utils/api';
+import { initiateSwap, linkStarknetSwap } from '../utils/api';
+import { initiateOnchainSwap } from '../utils/starknet';
 import toast from 'react-hot-toast';
 
 export function SwapForm() {
-  const { addSwap, setPreimage, setLoading, isLoading } = useSwapStore();
-  const { address, isConnected } = useWallet();
+  const { addSwap, setPreimage, setStarknetPreimage, setLoading, isLoading } = useSwapStore();
+  const { address, isConnected, starknet } = useWallet();
   
   const [btcAmount, setBtcAmount] = useState('');
   const [btcAddress, setBtcAddress] = useState('');
   const [timelockMinutes, setTimelockMinutes] = useState(60);
+
+  const buildSwapFromResponse = (response: any, inputAmount: string) => {
+    const now = Math.floor(Date.now() / 1000);
+    const timelock = response?.starknet?.timelockTimestamp ?? (now + timelockMinutes * 60);
+    // Store amount in satoshis for formatBTC to work correctly
+    const btcValue = parseFloat(inputAmount) || parseFloat(response?.btc?.amountBTC) || 0;
+    const amountSats = Math.floor(btcValue * 100_000_000);
+    return {
+      id: response?.swap?.id,
+      status: response?.swap?.status ?? 'initiated',
+      privacyScore: response?.swap?.privacyScore ?? 0,
+      createdAt: response?.swap?.createdAt ?? Date.now(),
+      btcHtlc: {
+        id: response?.btc?.htlcAddress ?? response?.swap?.id,
+        sender: btcAddress || 'testnet',
+        receiver: address || '',
+        amount: amountSats,
+        hashlock: response?.starknet?.hashlock ?? '',
+        timelock,
+        status: 'pending',
+        createdAt: response?.swap?.createdAt ?? Date.now(),
+        txid: response?.btc?.fundingTx?.txid,
+      },
+      starknetSwapId: response?.starknet?.swapId,
+      starknetAmountCommitment: response?.starknet?.amountCommitment,
+      starknetTimelock: timelock,
+      completedAt: response?.swap?.completedAt,
+    };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,18 +61,87 @@ export function SwapForm() {
     
     try {
       // Convert BTC to satoshis
-      const satoshis = Math.floor(parseFloat(btcAmount) * 100_000_000).toString();
+      const satoshis = Math.floor(parseFloat(btcAmount) * 100_000_000);
       
       const response = await initiateSwap({
         senderBtcAddress: btcAddress || 'bc1q_mock_address',
         receiverStarknetAddress: address,
-        btcAmount: satoshis,
+        btcAmount: btcAmount,
+        btcAmountSats: satoshis,
         timelockMinutes,
       });
 
       if (response.success) {
-        addSwap(response.swap);
-        setPreimage(response.preimage);
+        const swap = buildSwapFromResponse(response, btcAmount);
+        
+        console.log('Backend response secrets:', response?.secrets);
+        const savedPreimage = response?.secrets?.preimage || null;
+        const savedStarknetPreimage = response?.secrets?.starknetPreimage || null;
+        
+        console.log('Saving preimage:', savedPreimage);
+        console.log('Saving starknetPreimage:', savedStarknetPreimage);
+        
+        setPreimage(savedPreimage);
+        setStarknetPreimage(savedStarknetPreimage);
+
+        if (starknet) {
+          try {
+            const participant = response?.starknet?.recipientAddress || address;
+            let amountHash = response?.starknet?.amountCommitment;
+            let hashlock = response?.starknet?.hashlock;
+            const timelock = response?.starknet?.timelockTimestamp
+              || Math.floor(Date.now() / 1000) + timelockMinutes * 60;
+
+            console.log('Starknet init data from backend:', { participant, amountHash, hashlock, timelock });
+
+            // Generate missing values for demo if needed
+            if (!amountHash || !hashlock) {
+              const { hash: starknetHash } = await import('starknet');
+              const satoshis = Math.floor(parseFloat(btcAmount) * 100_000_000);
+              
+              if (!amountHash) {
+                // Generate a random blinding factor and compute commitment
+                const blindingBuf = new Uint8Array(31);
+                crypto.getRandomValues(blindingBuf);
+                const blindingFactor = '0x' + Array.from(blindingBuf).map(b => b.toString(16).padStart(2, '0')).join('');
+                amountHash = starknetHash.computePoseidonHashOnElements([satoshis.toString(), blindingFactor]);
+                console.log('Generated amountHash:', amountHash);
+              }
+              
+              if (!hashlock) {
+                const hashlockBuf = new Uint8Array(31);
+                crypto.getRandomValues(hashlockBuf);
+                hashlock = '0x' + Array.from(hashlockBuf).map(b => b.toString(16).padStart(2, '0')).join('');
+                console.log('Generated hashlock:', hashlock);
+              }
+            }
+
+            if (participant && amountHash && hashlock) {
+              const onchain = await initiateOnchainSwap(starknet, {
+                participant,
+                amountHash,
+                hashlock,
+                timelock,
+              });
+
+              swap.starknetTxHash = onchain.txHash;
+              swap.starknetAmountCommitment = amountHash;
+              if (onchain.swapId) {
+                swap.starknetSwapId = onchain.swapId;
+                await linkStarknetSwap(swap.id, onchain.swapId, onchain.txHash);
+              }
+
+              toast.success('Starknet transaction submitted!', { icon: '⚡' });
+            } else {
+              console.error('Missing required data for Starknet init:', { participant, amountHash, hashlock });
+            }
+          } catch (onchainError) {
+            console.error(onchainError);
+            toast.error('Starknet initiation failed. You can retry from the swap details.');
+          }
+        }
+
+        addSwap(swap);
         
         toast.success('Swap initiated! BTC HTLC created.', {
           icon: '🔒',

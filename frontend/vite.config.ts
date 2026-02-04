@@ -12,6 +12,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    fs: {
+      strict: false,
+      allow: [
+        path.resolve(__dirname),
+        path.resolve(__dirname, '../contracts/target/dev'),
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

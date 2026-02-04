@@ -16,6 +16,9 @@ export interface Swap {
   id: string;
   btcHtlc: HTLC;
   starknetSwapId?: string;
+  starknetTxHash?: string;
+  starknetAmountCommitment?: string;
+  starknetTimelock?: number;
   status: SwapStatus;
   privacyScore: number;
   createdAt: number;
@@ -50,4 +53,5 @@ export interface WalletState {
   address: string | null;
   isConnected: boolean;
   chainId?: string;
+  starknet?: any;
 }

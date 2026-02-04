@@ -13,7 +13,48 @@ export function SwapHistory() {
       try {
         const response = await getAllSwaps();
         if (response.swaps) {
-          setSwaps(response.swaps);
+          const now = Math.floor(Date.now() / 1000);
+          const mappedSwaps = response.swaps.map((swap: any) => {
+            const existing = swaps.find((s) => s.id === swap.id);
+            const blocksRemaining = typeof swap.blocksRemaining === 'number' ? swap.blocksRemaining : 0;
+            const fallbackTimelock = blocksRemaining > 0
+              ? now + blocksRemaining * 10 * 60
+              : now + 3600;
+            const amountSats = swap.btcAmount
+              ? Math.floor(parseFloat(swap.btcAmount) * 100_000_000)
+              : 0;
+            const existingAmountRaw = existing?.btcHtlc?.amount ?? 0;
+            const existingAmountSats = typeof existingAmountRaw === 'number'
+              ? existingAmountRaw
+              : parseInt(existingAmountRaw || '0', 10);
+            const mergedAmount = existingAmountSats > 0 ? existingAmountRaw : amountSats;
+            const existingTimelock = existing?.btcHtlc?.timelock ?? 0;
+            const mergedTimelock = existingTimelock > now ? existingTimelock : fallbackTimelock;
+
+            return {
+              ...existing,
+              id: swap.id,
+              status: swap.status,
+              privacyScore: swap.privacyScore ?? existing?.privacyScore ?? 0,
+              createdAt: swap.createdAt ?? existing?.createdAt ?? Date.now(),
+              btcHtlc: {
+                ...existing?.btcHtlc,
+                id: swap.id,
+                sender: existing?.btcHtlc?.sender ?? 'testnet',
+                receiver: existing?.btcHtlc?.receiver ?? 'testnet',
+                amount: mergedAmount,
+                hashlock: existing?.btcHtlc?.hashlock ?? '',
+                timelock: mergedTimelock,
+                status: existing?.btcHtlc?.status ?? 'pending',
+                createdAt: existing?.btcHtlc?.createdAt ?? swap.createdAt ?? Date.now(),
+              },
+            };
+          });
+
+          const existingOnly = swaps.filter((s) => !response.swaps.some((r: any) => r.id === s.id));
+          const combined = [...mappedSwaps, ...existingOnly];
+          const unique = Array.from(new Map(combined.map((s) => [s.id, s])).values());
+          setSwaps(unique);
         }
       } catch (error) {
         console.error('Failed to fetch swaps:', error);
@@ -24,7 +65,7 @@ export function SwapHistory() {
     const interval = setInterval(fetchSwaps, 10000); // Refresh every 10s
 
     return () => clearInterval(interval);
-  }, [setSwaps]);
+  }, [setSwaps, swaps]);
 
   if (swaps.length === 0) {
     return (
@@ -64,14 +105,14 @@ export function SwapHistory() {
       </div>
 
       <div className="space-y-2 max-h-80 overflow-y-auto">
-        {swaps.map((swap) => {
+        {swaps.map((swap, index) => {
           const now = Math.floor(Date.now() / 1000);
           const timeRemaining = swap.btcHtlc.timelock - now;
           const isActive = activeSwap?.id === swap.id;
 
           return (
             <button
-              key={swap.id}
+              key={`${swap.id}-${index}`}
               onClick={() => setActiveSwap(swap)}
               className={`w-full p-3 rounded-lg text-left transition-all ${
                 isActive 

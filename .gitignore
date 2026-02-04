@@ -16,6 +16,8 @@ target/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+.env.development
 
 # IDE
 .idea/
@@ -44,3 +46,11 @@ coverage/
 
 # Starknet
 .starkli/
+
+# Debug files (temporary)
+debug-*.js
+test-*.js
+
+# Secrets (never commit)
+*.key
+*.secret

@@ -1,9 +1,11 @@
-const API_BASE = '/api';
+// Use environment variable for production, fallback to '/api' for local dev (proxied by Vite)
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export async function initiateSwap(data: {
   senderBtcAddress: string;
   receiverStarknetAddress: string;
   btcAmount: string;
+  btcAmountSats?: number;
   timelockMinutes: number;
 }) {
   const response = await fetch(`${API_BASE}/swap/initiate`, {
@@ -24,11 +26,24 @@ export async function getAllSwaps() {
   return response.json();
 }
 
-export async function linkStarknetSwap(swapId: string, starknetSwapId: string) {
+export async function linkStarknetSwap(
+  swapId: string,
+  starknetSwapId: string,
+  starknetTxHash?: string
+) {
   const response = await fetch(`${API_BASE}/swap/${swapId}/link-starknet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ starknetSwapId }),
+    body: JSON.stringify({ starknetSwapId, starknetTxHash }),
+  });
+  return response.json();
+}
+
+export async function resolveStarknetSwapId(swapId: string, txHash: string) {
+  const response = await fetch(`${API_BASE}/swap/${swapId}/resolve-starknet`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ txHash }),
   });
   return response.json();
 }
@@ -79,6 +94,6 @@ export async function generateProof(amount: string) {
 }
 
 export async function checkHealth() {
-  const response = await fetch('/health');
+  const response = await fetch(`${API_BASE.replace('/api', '')}/health`);
   return response.json();
 }

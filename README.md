@@ -88,6 +88,12 @@ starkli deploy ./target/dev/stealthswap_StealthSwap.contract_class.json \
   --keystore ~/.starkli-wallets/keystore.json
 ```
 
+#### ✅ Latest Sepolia Deployment (2026-02-04)
+
+- **Class Hash**: `0x0244d48a8c0a2dc7e12bd2de28e20a29af350676ef299489f4d8b8f892cf7f31`
+- **Contract Address**: `0x058acc5b4ef9d1c65f5672f2174f01c62bd9bdc318e99d093d4b3ca71b56bdfc`
+- **Deploy Tx**: `0x05ac55ca9e6764949ef4c52c856267d9cf8c8d863cdce1c371c459a22169e8e2`
+
 ## 📁 Project Structure
 
 ```
