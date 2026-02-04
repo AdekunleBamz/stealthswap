@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import * as btcService from '../services/bitcoin.service.js';
 import { RpcProvider, hash } from 'starknet';
 
@@ -41,7 +41,7 @@ function calculatePrivacyScore(amountSats: number, timelockBlocks: number): numb
  * POST /api/swap/initiate
  * Initiate a complete BTC → Starknet atomic swap
  */
-swapRouter.post('/initiate', async (req, res) => {
+swapRouter.post('/initiate', async (req: Request, res: Response) => {
   try {
     const {
       senderWIF,
@@ -229,7 +229,7 @@ swapRouter.post('/initiate', async (req, res) => {
  * POST /api/swap/:id/fund
  * Fund a swap by broadcasting the BTC transaction
  */
-swapRouter.post('/:id/fund', async (req, res) => {
+swapRouter.post('/:id/fund', async (req: Request, res: Response) => {
   try {
     const { txHex } = req.body;
     const swap = swaps.get(req.params.id);
@@ -267,7 +267,7 @@ swapRouter.post('/:id/fund', async (req, res) => {
  * POST /api/swap/:id/link-starknet
  * Link a Starknet swap ID to this swap
  */
-swapRouter.post('/:id/link-starknet', async (req, res) => {
+swapRouter.post('/:id/link-starknet', async (req: Request, res: Response) => {
   try {
     const { starknetSwapId, starknetTxHash } = req.body;
     const swap = swaps.get(req.params.id);
@@ -301,7 +301,7 @@ swapRouter.post('/:id/link-starknet', async (req, res) => {
  * POST /api/swap/:id/resolve-starknet
  * Resolve Starknet swap ID from a transaction hash (server-side RPC avoids CORS)
  */
-swapRouter.post('/:id/resolve-starknet', async (req, res) => {
+swapRouter.post('/:id/resolve-starknet', async (req: Request, res: Response) => {
   try {
     const { txHash } = req.body as { txHash?: string };
     if (!txHash) {
@@ -339,7 +339,7 @@ swapRouter.post('/:id/resolve-starknet', async (req, res) => {
  * POST /api/swap/:id/complete
  * Complete the swap (claim BTC with preimage)
  */
-swapRouter.post('/:id/complete', async (req, res) => {
+swapRouter.post('/:id/complete', async (req: Request, res: Response) => {
   try {
     const { recipientWIF, preimage } = req.body;
     const swap = swaps.get(req.params.id);
@@ -390,7 +390,7 @@ swapRouter.post('/:id/complete', async (req, res) => {
  * POST /api/swap/:id/broadcast-claim
  * Broadcast the claim transaction
  */
-swapRouter.post('/:id/broadcast-claim', async (req, res) => {
+swapRouter.post('/:id/broadcast-claim', async (req: Request, res: Response) => {
   try {
     const { txHex } = req.body;
     const swap = swaps.get(req.params.id);
@@ -425,7 +425,7 @@ swapRouter.post('/:id/broadcast-claim', async (req, res) => {
  * POST /api/swap/:id/refund
  * Refund the swap after timelock (for sender)
  */
-swapRouter.post('/:id/refund', async (req, res) => {
+swapRouter.post('/:id/refund', async (req: Request, res: Response) => {
   try {
     const { senderWIF } = req.body;
     const swap = swaps.get(req.params.id);
@@ -476,7 +476,7 @@ swapRouter.post('/:id/refund', async (req, res) => {
  * GET /api/swap/:id
  * Get swap details
  */
-swapRouter.get('/:id', async (req, res) => {
+swapRouter.get('/:id', async (req: Request, res: Response) => {
   try {
     const swap = swaps.get(req.params.id);
 
@@ -528,7 +528,7 @@ swapRouter.get('/:id', async (req, res) => {
  * GET /api/swap
  * List all swaps
  */
-swapRouter.get('/', async (req, res) => {
+swapRouter.get('/', async (req: Request, res: Response) => {
   try {
     const currentHeight = await btcService.getBlockHeight();
 

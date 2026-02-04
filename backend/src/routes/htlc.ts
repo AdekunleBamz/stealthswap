@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import * as btcService from '../services/bitcoin.service.js';
 
 export const htlcRouter = Router();
@@ -10,7 +10,7 @@ const htlcs = new Map<string, any>();
  * POST /api/htlc/wallet/generate
  * Generate a new Bitcoin testnet wallet
  */
-htlcRouter.post('/wallet/generate', (req, res) => {
+htlcRouter.post('/wallet/generate', (req: Request, res: Response) => {
   try {
     const wallet = btcService.generateWallet();
     const faucetInfo = btcService.getTestnetFaucetInfo();
@@ -35,7 +35,7 @@ htlcRouter.post('/wallet/generate', (req, res) => {
  * GET /api/htlc/wallet/:address/balance
  * Get wallet balance
  */
-htlcRouter.get('/wallet/:address/balance', async (req, res) => {
+htlcRouter.get('/wallet/:address/balance', async (req: Request, res: Response) => {
   try {
     const balance = await btcService.getBalance(req.params.address);
     const utxos = await btcService.getUTXOs(req.params.address);
@@ -56,7 +56,7 @@ htlcRouter.get('/wallet/:address/balance', async (req, res) => {
  * GET /api/htlc/blockchain/height
  * Get current block height
  */
-htlcRouter.get('/blockchain/height', async (req, res) => {
+htlcRouter.get('/blockchain/height', async (req: Request, res: Response) => {
   try {
     const height = await btcService.getBlockHeight();
     res.json({ height, network: 'testnet' });
@@ -69,7 +69,7 @@ htlcRouter.get('/blockchain/height', async (req, res) => {
  * POST /api/htlc/hashlock/generate
  * Generate a random preimage and hashlock
  */
-htlcRouter.post('/hashlock/generate', (req, res) => {
+htlcRouter.post('/hashlock/generate', (req: Request, res: Response) => {
   try {
     const { preimage, hashlock } = btcService.generateHashlock();
 
@@ -87,7 +87,7 @@ htlcRouter.post('/hashlock/generate', (req, res) => {
  * POST /api/htlc/create
  * Create and fund a new HTLC on Bitcoin testnet
  */
-htlcRouter.post('/create', async (req, res) => {
+htlcRouter.post('/create', async (req: Request, res: Response) => {
   try {
     const {
       senderWIF,
@@ -171,7 +171,7 @@ htlcRouter.post('/create', async (req, res) => {
  * POST /api/htlc/:id/broadcast
  * Broadcast an HTLC funding transaction
  */
-htlcRouter.post('/:id/broadcast', async (req, res) => {
+htlcRouter.post('/:id/broadcast', async (req: Request, res: Response) => {
   try {
     const { txHex } = req.body;
 
@@ -203,7 +203,7 @@ htlcRouter.post('/:id/broadcast', async (req, res) => {
  * POST /api/htlc/:id/claim
  * Claim an HTLC with the preimage (for recipient)
  */
-htlcRouter.post('/:id/claim', async (req, res) => {
+htlcRouter.post('/:id/claim', async (req: Request, res: Response) => {
   try {
     const { recipientWIF, preimage } = req.body;
 
@@ -249,7 +249,7 @@ htlcRouter.post('/:id/claim', async (req, res) => {
  * POST /api/htlc/:id/refund
  * Refund an HTLC after timelock expires (for sender)
  */
-htlcRouter.post('/:id/refund', async (req, res) => {
+htlcRouter.post('/:id/refund', async (req: Request, res: Response) => {
   try {
     const { senderWIF } = req.body;
 
@@ -300,7 +300,7 @@ htlcRouter.post('/:id/refund', async (req, res) => {
  * GET /api/htlc/:id
  * Get HTLC details
  */
-htlcRouter.get('/:id', async (req, res) => {
+htlcRouter.get('/:id', async (req: Request, res: Response) => {
   try {
     const htlc = htlcs.get(req.params.id);
     if (!htlc) {
@@ -335,7 +335,7 @@ htlcRouter.get('/:id', async (req, res) => {
  * GET /api/htlc
  * List all HTLCs
  */
-htlcRouter.get('/', (req, res) => {
+htlcRouter.get('/', (req: Request, res: Response) => {
   const htlcList = Array.from(htlcs.values()).map((htlc) => ({
     id: htlc.id,
     htlcAddress: htlc.htlcAddress,
@@ -354,7 +354,7 @@ htlcRouter.get('/', (req, res) => {
  * GET /api/htlc/faucet/info
  * Get testnet faucet information
  */
-htlcRouter.get('/faucet/info', (req, res) => {
+htlcRouter.get('/faucet/info', (req: Request, res: Response) => {
   res.json({
     network: 'Bitcoin Testnet',
     faucets: [
