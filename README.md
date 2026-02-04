@@ -58,7 +58,7 @@ StealthSwap enables **privacy-preserving atomic swaps** between Bitcoin and Star
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/stealthswap.git
+git clone https://github.com/AdekunleBamz/stealthswap.git
 cd stealthswap
 
 # Install all dependencies
@@ -241,4 +241,4 @@ Built with 💜 for the Starknet RE{DEFINE} Hackathon 2026
 
 ---
 
-**Starknet Wallet Address**: `0x_YOUR_WALLET_ADDRESS`
+**Starknet Wallet Address**: *(to be added)*
