@@ -51,8 +51,8 @@ function App() {
               <span className="text-stark-500">Starknet</span>
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Privacy-preserving atomic swaps powered by{' '}
-              <span className="text-privacy-400">zero-knowledge proofs</span>
+              Privacy-preserving atomic swaps with{' '}
+              <span className="text-privacy-400">cryptographic commitments</span>
             </p>
           </div>
 
@@ -87,7 +87,7 @@ function App() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-privacy-500">🔒</span>
-                <span>ZK-STARKs</span>
+                <span>Poseidon</span>
               </div>
             </div>
           </div>

@@ -1,13 +1,13 @@
 # StealthSwap 🔒
 
-> Private BTC ↔ Starknet Atomic Swaps powered by Zero-Knowledge Proofs
+> Private BTC ↔ Starknet Atomic Swaps with STARK-friendly Cryptographic Commitments
 
 [![Built for Starknet RE{DEFINE} Hackathon](https://img.shields.io/badge/Hackathon-RE%7BDEFINE%7D%202026-purple)](https://hackathon.starknet.org)
 [![Track](https://img.shields.io/badge/Track-Bitcoin%20%2B%20Privacy-orange)](https://hackathon.starknet.org)
 
 ## 🎯 Overview
 
-StealthSwap enables **privacy-preserving atomic swaps** between Bitcoin and Starknet. By leveraging ZK-STARKs, we hide swap amounts and break the on-chain link between sender and receiver identities.
+StealthSwap enables **privacy-preserving atomic swaps** between Bitcoin and Starknet. Using STARK-friendly cryptographic commitments (Poseidon hashes), we hide swap amounts and break the on-chain link between sender and receiver identities.
 
 ### Key Features
 
@@ -102,7 +102,7 @@ stealthswap/
 │   ├── src/
 │   │   ├── lib.cairo       # Module exports
 │   │   ├── swap.cairo      # Main swap contract
-│   │   ├── verifier.cairo  # ZK verification logic
+│   │   ├── verifier.cairo  # Commitment verification logic
 │   │   └── types.cairo     # Shared types
 │   └── Scarb.toml
 │
@@ -214,7 +214,7 @@ npm test
 **Track**: Bitcoin + Privacy
 
 **What We Built**:
-- Cairo smart contracts for atomic swaps with ZK verification
+- Cairo smart contracts for atomic swaps with cryptographic commitment verification
 - Mock BTC HTLC service simulating Bitcoin integration
 - React dashboard with real-time swap monitoring
 - Privacy scoring system
@@ -229,7 +229,7 @@ npm test
 - **Smart Contracts**: Cairo (Starknet)
 - **Backend**: Node.js, Express, TypeScript
 - **Frontend**: React, Vite, TailwindCSS, Zustand
-- **ZK**: Poseidon hash, STARK verification
+- **Cryptography**: Poseidon hash commitments (STARK-friendly, designed for future full proof integration)
 
 ## 📄 License
 

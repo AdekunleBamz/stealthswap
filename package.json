@@ -1,7 +1,7 @@
 {
   "name": "stealthswap",
   "version": "1.0.0",
-  "description": "Private BTC ↔ Starknet Atomic Swaps powered by Zero-Knowledge Proofs",
+  "description": "Private BTC ↔ Starknet Atomic Swaps with STARK-friendly Cryptographic Commitments",
   "private": true,
   "workspaces": [
     "backend",
