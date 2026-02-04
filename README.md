@@ -258,7 +258,18 @@ npm test
 | POST | `/api/proof/generate` | Generate amount proof |
 | POST | `/api/proof/verify` | Verify proof |
 
-## 🎥 Demo Video
+## � Live Demo Evidence
+
+### Starknet Sepolia Transactions
+
+| Type | Transaction | Status |
+|------|-------------|--------|
+| Swap Initiation | [`0x07df2c00...`](https://sepolia.voyager.online/tx/0x07df2c00a0eb1d5f511148c7a407cc4789ab8aa96a40b911f41df7d2a3a605f2) | ✅ Accepted on L2 |
+| Contract | [`0x058acc5b...`](https://sepolia.voyager.online/contract/0x058acc5b4ef9d1c65f5672f2174f01c62bd9bdc318e99d093d4b3ca71b56bdfc) | ✅ Verified on Sepolia |
+
+You can verify these transactions on the Starknet Sepolia explorer!
+
+## �🎥 Demo Video
 
 [Watch the 3-minute demo](https://youtu.be/your-demo-link)
 
