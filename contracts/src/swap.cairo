@@ -284,4 +284,9 @@ pub mod StealthSwap {
             timestamp > swap.timelock
         }
 
-       
+        // Utility: Get all pending swaps count
+        fn get_pending_swaps_count(self: @ContractState) -> u64 {
+            self.swap_count.read()
+        }
+    }
+}
